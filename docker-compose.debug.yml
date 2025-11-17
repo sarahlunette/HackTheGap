@@ -43,8 +43,7 @@ services:
 
   app:
     build:
-      context: .
-      dockerfile: app/Dockerfile
+      context: ./app
     container_name: resilience_api
     ports:
       - "8000:8000"
