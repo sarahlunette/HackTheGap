@@ -70,7 +70,7 @@ async def fetch_earth_engine_data(
     # ------------------------------------------------------------
     # 3. Save JSON to app/docs/ for vectorstore ingestion
     # ------------------------------------------------------------
-    docs_dir = Path("/docs")
+    docs_dir = Path("/app/docs") # TODO: depends on docker compose
     docs_dir.mkdir(parents=True, exist_ok=True)
 
     timestamp = datetime.utcnow().strftime("%Y%m%d_%H%M%S")
@@ -86,7 +86,7 @@ async def fetch_earth_engine_data(
     # ------------------------------------------------------------
     # 4. Trigger vectorstore rebuild
     # ------------------------------------------------------------
-    build_script = "app/build_vectorstore.py"
+    build_script = "build_vectorstore.py" # TODO: depends on docker compose
 
     try:
         proc = await asyncio.create_subprocess_exec(

@@ -27,4 +27,4 @@ COPY . /app
 EXPOSE 9001
 
 # Run the MCP server
-CMD ["python", "main.py"]
+CMD ["fastmcp", "run", "main.py:mcp", "--transport", "http", "--port", "9001", "--host", "0.0.0.0"]

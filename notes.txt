@@ -1,0 +1,14 @@
+[] check les paths des scripts dans le docker compose
+
+[]launch test on reasoning model docker exec -it number_container /bin/bash
+python main.py
+
+[]tenter une requête sur l'API (vérifier les outputs lon lat reasoning etc)
+
+[] créer une image, artifact registery, cloud run
+
+[] Change prompts for reasoning
+
+
+
+Change the call to the API into the reasoning call and not the claude API ?

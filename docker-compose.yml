@@ -23,9 +23,11 @@ services:
     build:
       context: ./mcp_server
     container_name: mcp_server
+    command: python main.py   # IMPORTANT
     environment:
       - HF_TOKEN=${HF_TOKEN}
       - MCP_WEBSOCKET_URL=${MCP_WEBSOCKET_URL}
+
     volumes:
       - ./mcp_server:/app
       - ./app/docs:/app/docs

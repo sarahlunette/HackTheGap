@@ -5,6 +5,7 @@ Now supporting async MCP Earth Engine data ingestion directly from /chat.
 
 import os
 import csv
+import re
 import datetime
 import logging
 import json
@@ -22,6 +23,7 @@ from dotenv import load_dotenv
 
 # Anthropic Claude
 from anthropic import Anthropic
+from mistralai import Mistral
 
 # RAG (Qdrant + LlamaIndex)
 from qdrant_client import QdrantClient
@@ -39,8 +41,11 @@ from reportlab.pdfgen import canvas
 # HuggingFace login
 from huggingface_hub import login
 
-# 🔥 IMPORT MCP TOOL (async)
-# from mcp_server.tools.earth_engine_tool import fetch_earth_engine_data
+import asyncio
+from fastmcp import Client
+
+MCP_CLIENT_URL = "http://mcp_server:9001/mcp"
+
 
 # ============================================================
 # ENV & CONFIG
@@ -77,6 +82,7 @@ EXPORT_DIR.mkdir(exist_ok=True)
 
 logging.basicConfig(level=logging.INFO)
 logger = logging.getLogger("mvp")
+# logger.setLevel(logging.DEBUG) # TODO:TMP
 
 # Optional logs (for /logs endpoints if you want later)
 ACTION_LOGS: list[Dict[str, Any]] = []
@@ -123,6 +129,32 @@ def query_knowledge_base(question: str) -> str:
         return ""
     return "\n".join(n.text for n in nodes)
 
+# ============================================================
+# CALL MCP EARTH ENGINE
+# ============================================================
+
+async def call_mcp_fetch_earth_engine(lon, lat, date, radius):
+    """
+    Calls MCP server tool 'fetch_earth_engine_data' using FastMCP Client API.
+    """
+
+    payload = {
+        "lon": float(lon),
+        "lat": float(lat),
+        "recent_start": str(date),
+        "radius": int(radius)
+    }
+
+    try:
+        client = Client(MCP_CLIENT_URL)
+
+        async with client:  # ensures connection open/close
+            result = await client.call_tool("fetch_earth_engine_data", payload)
+            return result
+
+    except Exception as e:
+        return {"error": f"MCP client call failed: {str(e)}"}
+
 
 # ============================================================
 # Reasoning Model Prompt (Mistral)
@@ -146,7 +178,6 @@ Your output MUST be a strictly valid JSON object with the following structure:
     "disaster_type": string | null,       # e.g. "cyclone", "earthquake", "flood"
     "disaster_name": string | null,       # e.g. "Irma", "Maria"
 
-    "dataset": string | null,
     "date": "YYYY-MM-DD" | null,          # If explicitly provided or clearly inferable
     "lon": float | null,                  # ONLY if explicitly provided in message
     "lat": float | null,                  # ONLY if explicitly provided in message
@@ -160,28 +191,25 @@ Your output MUST be a strictly valid JSON object with the following structure:
 - Extract any place name mentioned: ("Saint-Martin", "Barbuda", "Port-au-Prince").
 - Extract any disaster name: (“Irma”, “Maria”, “Ida”).
 - Extract disaster type if obvious (“cyclone”, “hurricane”, “flood”).
-- DO NOT infer coordinates from locations. Only set lon/lat if USER explicitly gives numbers.
+- Infer coordinates from locations. Only set lon/lat if you can find them.
 
 ### DATE EXTRACTION RULES
 - If the user explicitly writes a date (“2025-11-01”, “1 Nov 2025”), extract and convert to ISO.
 - If the user mentions a well-known disaster name with a **globally known date** (e.g. “Cyclone Irma”),
-  you may set the date **ONLY if there is a widely-known single date associated with the event**.
+  you may set the date.
     Example:
       “Hurricane Irma” → date = “2017-09-06”.
-- If multiple dates exist or ambiguity is high → set date = null.
 - Never invent dates for generic phrases ("last week", "a while ago").
 
 ### GEO EXTRACTION RULES (STRICT)
-- Only fill lon/lat if they appear explicitly as numbers in the message.
 - Example accepted: “lon 14.5, lat -22.1”
 - Example rejected: “the north of the island” → lon = null, lat = null
 
 ### MCP TRIGGER RULES (VERY STRICT)
-The MCP tool should only be triggered if ALL of the following are explicitly present:
-1. dataset name
-2. a valid ISO date
-3. longitude (number)
-4. latitude (number)
+#The MCP tool should only be triggered if ALL of the following are explicitly present:
+1. a valid ISO date
+2. longitude (number)
+3. latitude (number)
 
 If ANY of these are missing → intent MUST NOT be “geospatial_request”.
 
@@ -226,105 +254,126 @@ def _default_structured_reasoning() -> dict:
         },
     }
 
+# -------------------------------
+# Utility: Extract JSON cleanly
+# -------------------------------
+def extract_json_block(text: str) -> str:
+    cleaned = text.replace("```json", "").replace("```", "").strip()
+
+    brace_level = 0
+    start = None
+
+    for i, char in enumerate(cleaned):
+        if char == "{":
+            if brace_level == 0:
+                start = i
+            brace_level += 1
+
+        elif char == "}":
+            brace_level -= 1
+            if brace_level == 0 and start is not None:
+                return cleaned[start:i + 1].strip()
+
+    raise ValueError(f"No JSON object found in text:\n{cleaned}")
+
+# -------------------------------
+# Call Retry
+# -------------------------------
+def mistral_call_with_retry(prompt, model="open-mistral-nemo", retries=5):
+    client = Mistral(api_key=MISTRAL_API_KEY)
+
+    for i in range(retries):
+        try:
+            res = client.chat.complete(
+                model=model,
+                messages=[{"role": "user", "content": prompt}],
+                temperature=0.2,
+                max_tokens=1500,
+            )
+            return res.choices[0].message.content
+
+        except Exception as e:
+            if "429" in str(e) or "capacity" in str(e):
+                wait = 2 ** i
+                print(f"Rate-limited — retrying in {wait}s...")
+                time.sleep(wait)
+                continue
+            raise
+
+    raise RuntimeError("Mistral: too many retries")
 
 # ============================================================
-# Reasoning function (Mistral)
+# Reasoning function (FINAL)
 # ============================================================
 def generate_reasoning_with_mistral(user_question: str) -> dict:
-    """
-    Calls Mistral chat/completions API to extract structured reasoning output.
-    Fully robust:
-    - correct endpoint
-    - graceful fallback on errors
-    - strict JSON parsing
-    - entity normalization (lon/lat/radius/date)
-    """
-
     if not MISTRAL_API_KEY:
-        logger.warning("MISTRAL_API_KEY not set — using fallback reasoning.")
+        logger.warning("MISTRAL_API_KEY missing — fallback mode.")
         return _default_structured_reasoning()
 
-    # Insert user question into prompt template
+    client = Mistral(api_key=MISTRAL_API_KEY)
     prompt = REASONING_PROMPT.replace("{user_question}", user_question)
 
-    # ----------------------------------------------
-    # Call Mistral v1 Chat Completion API
-    # ----------------------------------------------
     try:
-        response = requests.post(
-            "https://api.mistral.ai/v1/chat/completions",
-            headers={
-                "Authorization": f"Bearer {MISTRAL_API_KEY}",
-                "Content-Type": "application/json",
-            },
-            json={
-                "model": "mistral-medium-latest",  # safer & available 
-                "messages": [{"role": "user", "content": prompt}],
-                "temperature": 0.2,
-                "max_tokens": 500,
-            },
-            timeout=20,
+        # ---------------------------
+        # Call Mistral API
+        # ---------------------------
+        res = client.chat.complete(
+            model="mistral-medium-latest",  # safest, always available
+            messages=[{"role": "user", "content": prompt}],
+            temperature=0.2,
+            max_tokens=2000,
         )
 
-        response.raise_for_status()
+        raw = res.choices[0].message.content.strip()
+        logger.debug(f"[RAW OUTPUT]\n{raw}")
 
-        # The model's text output (should be JSON)
-        content = response.json()["choices"][0]["message"]["content"]
+        # ---------------------------
+        # Extract valid JSON
+        # ---------------------------
+        json_text = extract_json_block(raw)
+        logger.debug(f"[EXTRACTED JSON]\n{json_text}")
 
-        try:
-            result = json.loads(content)
-        except json.JSONDecodeError:
-            logger.error(f"[Reasoning] Invalid JSON returned by Mistral:\n{content}")
-            return _default_structured_reasoning()
+        result = json.loads(json_text)
 
     except Exception as e:
-        logger.error(f"[Reasoning] Error calling Mistral API: {e}")
+        logger.error(f"[Reasoning] Mistral SDK error: {e}")
         return _default_structured_reasoning()
 
     # ------------------------------------------------------
-    # GUARANTEE ENTITY STRUCTURE EXISTS
+    # Guarantee entity structure
     # ------------------------------------------------------
     result.setdefault("entities", {})
     entities = result["entities"]
 
     # ------------------------------------------------------
-    # Normalize lon / lat / radius → floats or None
+    # Normalize lon/lat/radius
     # ------------------------------------------------------
-    for key in ["lon", "lat", "radius"]:
-        val = entities.get(key)
-        if val in (None, "", "null"):
-            entities[key] = None
-            continue
+    for field in ["lon", "lat", "radius"]:
+        value = entities.get(field)
         try:
-            entities[key] = float(val)
-        except (TypeError, ValueError):
-            entities[key] = None
+            entities[field] = float(value) if value not in (None, "", "null") else None
+        except Exception:
+            entities[field] = None
 
     # ------------------------------------------------------
-    # Normalize date → ISO YYYY-MM-DD
+    # Normalize user date → ISO format
     # ------------------------------------------------------
     raw_date = entities.get("date")
     if raw_date:
         parsed = None
-
-        # Try ISO format
-        try:
-            parsed = datetime.datetime.fromisoformat(raw_date)
-        except Exception:
-            # Try common formats (dd/mm/yyyy, mm/dd/yyyy, yyyy/mm/dd)
-            for fmt in ("%d/%m/%Y", "%m/%d/%Y", "%Y/%m/%d"):
-                try:
-                    parsed = datetime.datetime.strptime(raw_date, fmt)
-                    break
-                except Exception:
-                    continue
+        fmts = ("%Y-%m-%d", "%d/%m/%Y", "%m/%d/%Y", "%Y/%m/%d")
+        for fmt in fmts:
+            try:
+                parsed = datetime.datetime.strptime(raw_date, fmt)
+                break
+            except Exception:
+                continue
 
         entities["date"] = parsed.strftime("%Y-%m-%d") if parsed else None
     else:
         entities["date"] = None
 
     return result
-
 
 # ============================================================
 # Claude generator
@@ -377,6 +426,7 @@ async def chat(req: ChatRequest, username: str = Depends(verify_credentials)):
     # 1. Reasoning
     reasoning_output = generate_reasoning_with_mistral(user_msg)
     entities = reasoning_output.get("entities", {})
+    print(entities)
 
     # 2. Initial RAG
     rag_context = query_knowledge_base(user_msg)
@@ -401,19 +451,18 @@ Entities: {json.dumps(entities, ensure_ascii=False)}
 
     if (
         reasoning_output.get("intent") == "geospatial_request"
-        and entities.get("dataset") is not None
         and entities.get("lon") is not None
         and entities.get("lat") is not None
         and entities.get("date") is not None
     ):
         try:
-            geospatial_result = await fetch_earth_engine_data(
-                dataset=entities["dataset"],
+            geospatial_result = await call_mcp_fetch_earth_engine(
                 lon=entities["lon"],
                 lat=entities["lat"],
                 date=entities["date"],
-                radius=int(entities.get("radius") or 10),
+                radius=int(entities.get("radius") or 10)
             )
+
         except Exception as e:
             logger.error(f"MCP tool failed: {e}")
             geospatial_result = {"error": f"MCP tool failed: {e}"}
@@ -554,24 +603,18 @@ def reset_history(username: str = Depends(verify_credentials)):
 
 # Test feature
 # ======================================================================
-# 🔍 Standalone Test: Run reasoning without starting FastAPI
-# ======================================================================
+
 if __name__ == "__main__":
-    print("\n==============================")
-    print("🔍 RUNNING REASONING TESTS")
-    print("==============================\n")
+    import asyncio
 
-    test_messages = [
-        "What was the impact of Cyclone Irma on Saint-Martin?"
-    ]
+    print("=== TESTING /chat FUNCTION DIRECTLY ===")
 
-    for msg in test_messages:
-        print(f"\nUSER QUESTION: {msg}")
-        print("--------------------------------------------------")
+    async def test_chat():
+        class FakeReq:
+            question =  "Resilience plan of Cyclone Irma on Saint-Martin? On what date ? At what latitude of the center of the island ? At what longitude of the center of the island ? Make sure structured answer with latitude, longitude and radius = 10, find the date."
 
-        reasoning = generate_reasoning_with_mistral(msg)
 
-        print("\nREASONING OUTPUT:")
-        print(json.dumps(reasoning, indent=2, ensure_ascii=False))
+        out = await chat(FakeReq(), "admin")
+        print(json.dumps(out, indent=2, ensure_ascii=False))
 
-        print("\n--------------------------------------------------\n")
+    asyncio.run(test_chat())

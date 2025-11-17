@@ -1,11 +1,14 @@
 fastapi
 uvicorn
 
+fastmcp
+
 python-dotenv
 requests
 
 anthropic
 huggingface_hub
+mistralai
 
 qdrant-client
 llama-index-core
@@ -28,3 +31,5 @@ langchain_community==0.2.4
 aiohttp
 anyio
 overpy
+asyncio
+
