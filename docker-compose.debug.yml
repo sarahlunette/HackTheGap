@@ -1,0 +1,79 @@
+name: resilience-debug
+
+version: "3.9"
+
+services:
+  qdrant:
+    image: qdrant/qdrant:latest
+    container_name: qdrant
+    ports:
+      - "6333:6333"
+    volumes:
+      - qdrant_storage:/qdrant/storage
+    restart: unless-stopped
+
+    # healthcheck:
+    #   test: ["CMD", "curl", "-f", "http://localhost:6333/collections"]
+    #   interval: 5s
+    #   timeout: 3s
+    #   retries: 20
+    #   start_period: 10s
+
+  mcp_server:
+    build:
+      context: ./mcp_server
+    container_name: mcp_server
+    environment:
+      - HF_TOKEN=${HF_TOKEN}
+      - MCP_WEBSOCKET_URL=${MCP_WEBSOCKET_URL}
+    volumes:
+      - ./mcp_server:/app
+      - ./app/docs:/app/docs
+    ports:
+      - "9001:9001"
+    # depends_on:
+    #   qdrant:
+    #     condition: service_healthy
+    healthcheck:
+      test: ["CMD", "curl", "-f", "http://localhost:9001/health"]
+      interval: 5s
+      timeout: 3s
+      retries: 20
+    restart: unless-stopped
+
+  app:
+    build:
+      context: .
+      dockerfile: app/Dockerfile
+    container_name: resilience_api
+    ports:
+      - "8000:8000"
+    environment:
+      - QDRANT_URL=http://qdrant:6333
+      - HF_TOKEN=${HF_TOKEN}
+      - CLAUDE_API_KEY=${CLAUDE_API_KEY}
+      - MISTRAL_API_KEY=${MISTRAL_API_KEY}
+      - ANTHROPIC_API_URL=${ANTHROPIC_API_URL}
+      - ANTHROPIC_API_KEY=${ANTHROPIC_API_KEY}
+      - AUTH_MODE=${AUTH_MODE}
+    volumes:
+      - ./app:/app
+      - ./docs:/docs
+      - ./exports:/exports
+      - qdrant_storage:/qdrant/storage
+    # depends_on:
+    #   qdrant:
+    #     condition: service_healthy
+    healthcheck:
+      test: ["CMD", "curl", "-f", "http://localhost:8000/docs"]
+      interval: 5s
+      timeout: 3s
+      retries: 20
+    restart: unless-stopped
+
+volumes:
+  qdrant_storage:
+
+networks:
+  default:
+    name: resilience-net
