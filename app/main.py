@@ -20,6 +20,7 @@ from fastapi.security import HTTPBasic, HTTPBasicCredentials
 from fastapi.responses import FileResponse
 from pydantic import BaseModel
 from dotenv import load_dotenv
+from fastapi.middleware.cors import CORSMiddleware
 
 # Anthropic Claude
 from anthropic import Anthropic
@@ -394,6 +395,14 @@ def generate_with_claude(prompt: str) -> str:
 app = FastAPI(title="Crisis RAG + MCP API")
 security = HTTPBasic()
 
+# Autoriser toutes les origines (comme votre CORS(app) en Flask)
+app.add_middleware(
+    CORSMiddleware,
+    allow_origins=["*"],  # en prod, remplace par la liste de domaines autorisés
+    allow_credentials=True,
+    allow_methods=["*"],
+    allow_headers=["*"],
+)
 
 def verify_credentials(
     credentials: HTTPBasicCredentials = Depends(security),
