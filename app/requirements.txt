@@ -28,7 +28,6 @@ reportlab
 langchain==0.2.11
 langchain_community==0.2.4
 langgraph
-langchain_core
 
 aiohttp
 anyio

@@ -35,9 +35,9 @@ from fastmcp import Client
 # ============================================
 CLAUDE_API_KEY = os.getenv("CLAUDE_API_KEY")
 MISTRAL_API_KEY = os.getenv("MISTRAL_API_KEY")
-QDRANT_URL     = os.getenv("QDRANT_URL", "http://localhost:6333")
+QDRANT_URL = os.getenv("QDRANT_URL", "http://localhost:6333")
 COLLECTION_NAME = os.getenv("QDRANT_COLLECTION", "island_docs")
-MCP_CLIENT_URL  = os.getenv("MCP_CLIENT_URL", "http://mcp_server:9001/mcp")
+MCP_CLIENT_URL = os.getenv("MCP_CLIENT_URL", "http://mcp_server:9001/mcp")
 
 anthropic_client = Anthropic(api_key=CLAUDE_API_KEY)
 
@@ -50,15 +50,17 @@ logger.setLevel(logging.INFO)
 ###############################################
 # MEMORY PER USER
 ###############################################
-USER_MEMORIES = {}
+USER_MEMORIES: Dict[str, ConversationBufferMemory] = {}
 
-def get_memory(username: str):
+
+def get_memory(username: str) -> ConversationBufferMemory:
     if username not in USER_MEMORIES:
         USER_MEMORIES[username] = ConversationBufferMemory(
             return_messages=True,
-            chat_memory=ChatMessageHistory()
+            chat_message_history=ChatMessageHistory()
         )
     return USER_MEMORIES[username]
+
 
 ###############################################
 # RAG INIT
@@ -77,9 +79,10 @@ storage_context = StorageContext.from_defaults(vector_store=vector_store)
 index = VectorStoreIndex.from_vector_store(
     vector_store=vector_store,
     storage_context=storage_context,
-    embed_model=embed_model
+    embed_model=embed_model,
 )
 query_engine = index.as_retriever(similarity_top_k=3)
+
 
 def query_rag(question: str) -> str:
     try:
@@ -88,6 +91,7 @@ def query_rag(question: str) -> str:
     except Exception as e:
         logger.error(f"RAG error: {e}")
         return ""
+
 
 ###############################################
 # REASONING — MISTRAL
@@ -168,19 +172,22 @@ User message:
 "{user_question}"
 """
 
+
 def extract_json_block(text: str) -> str:
     cleaned = text.replace("```json", "").replace("```", "").strip()
     brace = 0
     start = None
     for i, c in enumerate(cleaned):
         if c == "{":
-            if brace == 0: start = i
+            if brace == 0:
+                start = i
             brace += 1
         elif c == "}":
             brace -= 1
             if brace == 0 and start is not None:
-                return cleaned[start:i+1].strip()
+                return cleaned[start:i + 1].strip()
     raise ValueError("No JSON found.")
+
 
 def run_reasoning_mistral(user_question: str) -> dict:
     client = Mistral(api_key=MISTRAL_API_KEY)
@@ -202,7 +209,7 @@ def run_reasoning_mistral(user_question: str) -> dict:
     for f in ["lon", "lat", "radius"]:
         try:
             entities[f] = float(entities.get(f)) if entities.get(f) else None
-        except:
+        except Exception:
             entities[f] = None
 
     # format date → ISO
@@ -210,10 +217,11 @@ def run_reasoning_mistral(user_question: str) -> dict:
         try:
             dt = datetime.datetime.fromisoformat(entities["date"])
             entities["date"] = dt.strftime("%Y-%m-%d")
-        except:
+        except Exception:
             entities["date"] = None
 
     return parsed
+
 
 ###############################################
 # MCP CALL
@@ -226,17 +234,27 @@ async def call_mcp(entities: dict):
             "lon": entities["lon"],
             "lat": entities["lat"],
             "recent_start": entities["date"],
-            "radius": int(entities.get("radius") or 10)
+            "radius": int(entities.get("radius") or 10),
         }
         async with client:
             return await client.call_tool("fetch_earth_engine_data", payload)
     except Exception as e:
         return {"error": f"MCP failed: {e}"}
 
+
 ###############################################
 # FINAL ANSWER — CLAUDE
 ###############################################
-def build_claude_prompt(user_msg, reasoning, rag, mcp):
+
+def build_claude_prompt(
+    user_msg: str,
+    reasoning: dict,
+    rag: Optional[str],
+    mcp: Optional[dict],
+    history: Optional[str] = None,
+) -> str:
+    history_block = history or "<<NO HISTORY AVAILABLE>>"
+
     return f"""
 ### REASONING MODEL
 {json.dumps(reasoning, ensure_ascii=False, indent=2)}
@@ -247,23 +265,11 @@ def build_claude_prompt(user_msg, reasoning, rag, mcp):
 ### MCP RESULT
 {json.dumps(mcp, ensure_ascii=False, indent=2) if mcp else 'None'}
 
+### CONVERSATION HISTORY (last turns)
+{history_block}
+
 ### USER MESSAGE
 {user_msg}
-
-### ROLE
-You are RESILIENCE-GPT...
-
--------------------------------------------------------------------------------
-### 🔎 INPUT BLOCKS
-
-You receive four inputs:
-
-1. **Reasoning Model Output (summarized above)** — structured guidance about the user’s intent, sectors, locations, and time horizon.
-2. **RAG CONTEXT** — text retrieved from local documents (GIS, infrastructure, reports, tables, project docs).
-3. **CONVERSATION HISTORY** — the last turns of the chat with this user.
-4. **CURRENT USER MESSAGE** — the question to answer now.
-
----
 
 -------------------------------------------------------------------------------
 ### 🎯 GLOBAL ROLE
@@ -285,8 +291,8 @@ You must integrate relevant information from the RAG CONTEXT when available.
 ### 🧠 MODE SELECTION (SHORT vs STRUCTURED)
 
 The Reasoning Model suggests:
-- **Intent** = {reasoning_output.get('intent')}
-- **Response Mode** = {reasoning_output.get('response_mode')}
+- **Intent** = {reasoning.get('intent')}
+- **Response Mode** = {reasoning.get('response_mode')}
 
 Behavior:
 
@@ -309,18 +315,26 @@ You must not ask the user for clarification; choose the best interpretation and 
 -------------------------------------------------------------------------------
 ### 📘 STRUCTURED OUTPUT FORMAT (ONLY IF STRUCTURED MODE)
 
-[... keep your detailed section structure here if you want ...]
-(Executive Summary, Context Reconstruction, Priority Matrix, Sector Plans, Project Portfolio, Logistics, Finance, Risks, Roadmap.)
+Use a clear structure such as:
+- Executive Summary
+- Context & Hazard Description
+- Damage & Impact Overview
+- Priority Sectors & Critical Assets
+- Short-Term Actions (0–3 months)
+- Medium-Term Actions (3–24 months)
+- Long-Term Resilience Transformation (2–10+ years)
+- Risks, Constraints & Assumptions
+- Suggested Project Portfolio / Interventions
 
-In short mode, answer briefly without the full structure.
+In short mode, answer briefly without full structure.
 
 Now answer the CURRENT USER MESSAGE accordingly.
-
 """
+
 
 def run_claude(prompt: str) -> str:
     with anthropic_client.messages.stream(
-        model="claude-sonnet-4.5",
+        model="claude-sonnet-4-5-20250929",
         temperature=0.7,
         max_tokens=64000,
         messages=[{"role": "user", "content": prompt}],
@@ -337,6 +351,7 @@ class AgentState(BaseModel):
     reasoning: Optional[Dict[str, Any]] = None
     rag: Optional[str] = None
     mcp: Optional[Dict[str, Any]] = None
+    history: Optional[str] = None
     final_answer: Optional[str] = None
 
 
@@ -349,31 +364,36 @@ def reasoning_node(state: AgentState):
     reasoning = run_reasoning_mistral(user_msg)
     return {"reasoning": reasoning}
 
+
 def rag_node(state: AgentState):
     user_msg = state.messages[-1]["content"]
     rag = query_rag(user_msg)
     return {"rag": rag or "<<EMPTY>>"}
 
-def router(state: AgentState):
-    r = state.reasoning
-    e = r.get("entities", {})
 
-    if r["intent"] == "geospatial_request" and e.get("lon") and e.get("lat") and e.get("date"):
+def router(state: AgentState):
+    r = state.reasoning or {}
+    e = r.get("entities", {}) or {}
+
+    if r.get("intent") == "geospatial_request" and e.get("lon") and e.get("lat") and e.get("date"):
         return "call_mcp"
     return "no_mcp"
 
+
 async def mcp_node(state: AgentState):
-    r = state.reasoning["entities"]
+    r = (state.reasoning or {}).get("entities", {}) or {}
     res = await call_mcp(r)
     return {"mcp": res}
+
 
 def final_node(state: AgentState):
     user_msg = state.messages[-1]["content"]
     prompt = build_claude_prompt(
         user_msg=user_msg,
-        reasoning=state.reasoning,
+        reasoning=state.reasoning or {},
         rag=state.rag,
-        mcp=state.mcp
+        mcp=state.mcp if hasattr(state, "mcp") else None,
+        history=state.history,
     )
     answer = run_claude(prompt)
     return {"final_answer": answer}
@@ -401,7 +421,7 @@ graph.add_conditional_edges(
     {
         "call_mcp": "mcp",
         "no_mcp": "final",
-    }
+    },
 )
 
 graph.add_edge("mcp", "final")
@@ -420,8 +440,16 @@ async def run_agent(user_message: str, username: str):
     """
     memory = get_memory(username)
 
+    # Build conversation history text (last ~5 turns)
+    history_msgs = memory.chat_memory.messages[-10:]
+    history_text = "\n".join(
+        f"{getattr(m, 'type', 'UNKNOWN').upper()}: {getattr(m, 'content', '')}"
+        for m in history_msgs
+    )
+
     state = {
-        "messages": [{"role": "user", "content": user_message}]
+        "messages": [{"role": "user", "content": user_message}],
+        "history": history_text,
     }
 
     result = await workflow.ainvoke(state)
@@ -431,8 +459,8 @@ async def run_agent(user_message: str, username: str):
     memory.chat_memory.add_ai_message(result["final_answer"])
 
     return {
-        "answer": result["final_answer"],
-        "reasoning": result["reasoning"],
-        "rag_context": result["rag"],
-        "mcp_result": result["mcp"],
+        "answer": result.get("final_answer"),
+        "reasoning": result.get("reasoning"),
+        "rag_context": result.get("rag"),
+        "mcp_result": result.get("mcp", None),   # ← prevents KeyError
     }

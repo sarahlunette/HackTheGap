@@ -16,6 +16,7 @@ import os
 from fastapi import FastAPI, Depends, HTTPException, Header
 from fastapi.security import HTTPBasic, HTTPBasicCredentials
 from pydantic import BaseModel
+from fastapi.middleware.cors import CORSMiddleware
 
 from dotenv import load_dotenv
 
@@ -32,6 +33,14 @@ MVP_PASS = os.getenv("MVP_PASS", "password")
 app = FastAPI(title="ResilienceGPT — Unified LangGraph Agent API")
 security = HTTPBasic()
 
+# Autoriser toutes les origines (comme votre CORS(app) en Flask)
+app.add_middleware(
+    CORSMiddleware,
+    allow_origins=["*"],  # en prod, remplace par la liste de domaines autorisés
+    allow_credentials=True,
+    allow_methods=["*"],
+    allow_headers=["*"],
+)
 
 # ------------------------------------------------------
 # Authentication logic
