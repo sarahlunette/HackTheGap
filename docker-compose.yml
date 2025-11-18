@@ -50,7 +50,7 @@ services:
     ports:
       - "8000:8000"
     environment:
-      - QDRANT_URL=http://qdrant:6333
+      - QDRANT_URL=https://qdrant-763875669747.europe-west2.run.app #http://qdrant:6333
       - HF_TOKEN=${HF_TOKEN}
       - CLAUDE_API_KEY=${CLAUDE_API_KEY}
       - MISTRAL_API_KEY=${MISTRAL_API_KEY}
