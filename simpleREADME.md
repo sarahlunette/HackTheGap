@@ -2,7 +2,7 @@
 
 This project provides a crisis-planning AI using:
 - Qdrant as the vectorstore
-- FastAPI backend (`main_anthropic_qdrant.py`)
+- FastAPI backend (`main.py`)
 - Streamlit chat interface (`demo.py`)
 - A build script to generate the vectorstore (`build_vectorstore.py`)
 
@@ -55,10 +55,10 @@ and creates a Qdrant collection.
 From inside the `app/` directory:
 
 ```bash
-uvicorn main_anthropic_qdrant:app --reload --port 9000
+uvicorn main:app --reload --port 9000
 ```
 
-FastAPI will be available at:
+FastAPI will be available at (modify the port in the latter command and in the script if necessary):
 
 ```
 http://localhost:9000
@@ -83,7 +83,7 @@ This launches the chat UI that connects to the FastAPI backend.
 ```
 TheLab_/
 ├── app/
-│   ├── main_anthropic_qdrant.py
+│   ├── main.py
 │   ├── build_vectorstore.py
 │   ├── docs/
 │   └── vectorstore/
@@ -98,7 +98,7 @@ TheLab_/
 
 1. Start Qdrant  
 2. Build vectorstore with `build_vectorstore.py`  
-3. Run FastAPI using `main_anthropic_qdrant.py`  
+3. Run FastAPI using `main.py`  
 4. Launch Streamlit chat UI  
 
 Nothing else is required.
