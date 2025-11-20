@@ -7,8 +7,11 @@ python main.py
 
 [] créer une image, artifact registery, cloud run
 
-[] Change prompts for reasoning
+[] Change prompts for reasoning adapt to input claude to know whether I have to user user_msg
 
+[] Change the state if state is not simple answer str but other formats
 
 
 Change the call to the API into the reasoning call and not the claude API ?
+Increment betterment learning 
+Ca s'appelle des transformations mathématiques (pandas)
