@@ -259,7 +259,7 @@ def _default_structured_reasoning() -> dict:
 # Utility: Extract JSON cleanly
 # -------------------------------
 def extract_json_block(text: str) -> str:
-    cleaned = text.replace("```json", "").replace("```", "").strip()
+    cleaned = text.replace("```json", "").replace("```", "")
 
     brace_level = 0
     start = None

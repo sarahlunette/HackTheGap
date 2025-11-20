@@ -70,7 +70,7 @@ async def fetch_earth_engine_data(
     # ------------------------------------------------------------
     # 3. Save JSON to app/docs/ for vectorstore ingestion
     # ------------------------------------------------------------
-    docs_dir = Path("/app/docs") # TODO: depends on docker compose
+    docs_dir = Path("../docs") # TODO: depends on docker compose
     docs_dir.mkdir(parents=True, exist_ok=True)
 
     timestamp = datetime.utcnow().strftime("%Y%m%d_%H%M%S")

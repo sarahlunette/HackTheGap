@@ -19,29 +19,29 @@ services:
     #   retries: 20
     #   start_period: 10s
 
-  mcp_server:
-    build:
-      context: ./mcp_server
-    container_name: mcp_server
-    command: python main.py   # IMPORTANT
-    environment:
-      - HF_TOKEN=${HF_TOKEN}
-      - MCP_WEBSOCKET_URL=${MCP_WEBSOCKET_URL}
+  # mcp_server:
+  #   build:
+  #     context: ./mcp_server
+  #   container_name: mcp_server
+  #   command: python main.py   # IMPORTANT
+  #   environment:
+  #     - HF_TOKEN=${HF_TOKEN}
+  #     - MCP_WEBSOCKET_URL=${MCP_WEBSOCKET_URL}
 
-    volumes:
-      - ./mcp_server:/app
-      - ./app/docs:/app/docs
-    ports:
-      - "9001:9001"
-    # depends_on:
-    #   qdrant:
-    #     condition: service_healthy
-    healthcheck:
-      test: ["CMD", "curl", "-f", "http://localhost:9001/health"]
-      interval: 5s
-      timeout: 3s
-      retries: 20
-    restart: unless-stopped
+  #   volumes:
+  #     - ./mcp_server:/app
+  #     - ./app/docs:/app/docs
+  #   ports:
+  #     - "9001:9001"
+  #   # depends_on:
+  #   #   qdrant:
+  #   #     condition: service_healthy
+  #   healthcheck:
+  #     test: ["CMD", "curl", "-f", "http://localhost:9001/health"]
+  #     interval: 5s
+  #     timeout: 3s
+  #     retries: 20
+  #   restart: unless-stopped
 
   app:
     build:
