@@ -273,7 +273,7 @@ def extract_json_block(text: str) -> str:
         elif char == "}":
             brace_level -= 1
             if brace_level == 0 and start is not None:
-                return cleaned[start:i + 1].strip()
+                return cleaned[start:i + 1]
 
     raise ValueError(f"No JSON object found in text:\n{cleaned}")
 
