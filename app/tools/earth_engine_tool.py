@@ -4,6 +4,8 @@ from pathlib import Path
 
 API_URL = "https://my-backend-57y2ldgf7q-ew.a.run.app/analyze"
 
+import logging
+logger = logging.getLogger("tools")
 
 # ------------------------------------------------------------
 # FastMCP 0.3.x — NO decorators inside tool files
@@ -29,6 +31,7 @@ async def fetch_earth_engine_data(
     Returns:
         dict: saved file info + backend response + vectorstore rebuild logs
     """
+    logger.info("[TOOL CALLED] fetch_earth_engine_data(...)")
 
     import aiohttp
     from datetime import datetime

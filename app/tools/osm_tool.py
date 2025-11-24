@@ -5,6 +5,8 @@ import overpy
 import pandas as pd
 from pathlib import Path
 
+import logging
+logger = logging.getLogger("tools")
 
 # ============================================================
 # Helper: Robust Overpass Query with Retry
@@ -44,6 +46,7 @@ def get_osm_data(location: str, features: list[str]):
     Fetch OSM data for a given location and list of features.
     Saves CSV file and returns metadata.
     """
+    logger.info("[TOOL CALLED] get_osm_data(...)")
 
     if isinstance(features, str):
         features = [features]

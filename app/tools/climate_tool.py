@@ -6,6 +6,8 @@ import pandas as pd
 import anyio
 from pathlib import Path
 
+import logging
+logger = logging.getLogger("tools")
 
 # ============================================================
 # Helper: Validate date format
@@ -31,6 +33,7 @@ def get_climate_forecast(date_str: str, area: list[float]):
     Returns:
         dict: {status, csv_path, count, message}
     """
+    logger.info("[TOOL CALLED] get_climate_forecast(...)")
 
     # ---------------------------------------------
     # Input validation
