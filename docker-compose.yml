@@ -9,7 +9,8 @@ services:
     ports:
       - "6333:6333"
     volumes:
-      - qdrant_storage:/qdrant/storage
+      - ./qdrant_storage/storage:/qdrant/storage
+
     restart: unless-stopped
 
     # healthcheck:
@@ -45,7 +46,7 @@ services:
 
   app:
     build:
-      context: ./app
+      context: .
     container_name: resilience_api
     ports:
       - "8000:8000"

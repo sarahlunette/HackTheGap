@@ -4,13 +4,17 @@ import asyncio
 from pathlib import Path
 from unittest.mock import patch, MagicMock, AsyncMock
 import sys
-sys.path.append('..')
-from app.tools.earth_engine_tool import fetch_earth_engine_data  
+
+sys.path.append("..")
+from app.tools.earth_engine_tool import fetch_earth_engine_data
+
 
 @pytest.mark.anyio
 @patch("app.tools.earth_engine_tool.asyncio.create_subprocess_exec")
 @patch("aiohttp.ClientSession")
-def test_fetch_earth_engine_data_success(mock_aiohttp, mock_subproc, tmp_path, monkeypatch):
+def test_fetch_earth_engine_data_success(
+    mock_aiohttp, mock_subproc, tmp_path, monkeypatch
+):
     monkeypatch.chdir(tmp_path)
     docs_dir = tmp_path / "docs"
     docs_dir.mkdir()
@@ -39,9 +43,11 @@ def test_fetch_earth_engine_data_success(mock_aiohttp, mock_subproc, tmp_path, m
     mock_subproc.return_value = mock_proc
 
     # Run and assert as before
-    result = asyncio.run(fetch_earth_engine_data(
-        lon=1.23, lat=4.56, recent_start="2025-10-01", radius=10
-    ))
+    result = asyncio.run(
+        fetch_earth_engine_data(
+            lon=1.23, lat=4.56, recent_start="2025-10-01", radius=10
+        )
+    )
     assert result["api_response"] == {"ok": True, "value": 42}
     assert "Data saved and vectorstore updated" in result["message"]
     assert Path(result["saved_to"]).exists()

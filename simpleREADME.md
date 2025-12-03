@@ -71,7 +71,7 @@ http://localhost:9000
 From the **project root**:
 
 ```bash
-streamlit run streamlit/demo.py
+streamlit run demo.py
 ```
 
 This launches the chat UI that connects to the FastAPI backend.

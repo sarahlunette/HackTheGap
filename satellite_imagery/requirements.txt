@@ -1,4 +1,4 @@
-osmx
+osmnx
 geemap
 geopandas
 ee

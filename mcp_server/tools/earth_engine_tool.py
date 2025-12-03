@@ -7,6 +7,7 @@ from langchain_core.tools import tool
 
 API_URL = "https://my-backend-57y2ldgf7q-ew.a.run.app/analyze"
 
+
 @tool(
     name="fetch_earth_engine_data",
     description="Fetch satellite analysis for a geo-point using longitude, latitude, start date, optional radius, and threshold factor.",
@@ -16,7 +17,7 @@ API_URL = "https://my-backend-57y2ldgf7q-ew.a.run.app/analyze"
         "recent_start": str,
         "radius": int,
         "thresholdFactor": float,
-    }
+    },
 )
 async def fetch_earth_engine_data(
     lon: float,
@@ -67,9 +68,10 @@ async def fetch_earth_engine_data(
     build_script = "build_vectorstore.py"
     try:
         proc = await asyncio.create_subprocess_exec(
-            "python", build_script,
+            "python",
+            build_script,
             stdout=asyncio.subprocess.PIPE,
-            stderr=asyncio.subprocess.PIPE
+            stderr=asyncio.subprocess.PIPE,
         )
         stdout, stderr = await proc.communicate()
         rebuild_log = stdout.decode() + "\n" + stderr.decode()
@@ -85,5 +87,5 @@ async def fetch_earth_engine_data(
         "radius": radius,
         "thresholdFactor": thresholdFactor,
         "vectorstore_update_log": rebuild_log,
-        "message": "Data saved and vectorstore updated."
+        "message": "Data saved and vectorstore updated.",
     }

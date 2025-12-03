@@ -42,6 +42,7 @@ app.add_middleware(
     allow_headers=["*"],
 )
 
+
 # ------------------------------------------------------
 # Authentication logic
 # ------------------------------------------------------
@@ -85,10 +86,7 @@ async def chat(req: ChatRequest, username: str = Depends(verify_credentials)):
       - memory per user
     """
 
-    result = await run_agent(
-        user_message=req.question,
-        username=username
-    )
+    result = await run_agent(user_message=req.question, username=username)
 
     return {
         "answer": result["answer"],
@@ -108,6 +106,7 @@ async def reset_memory(username: str = Depends(verify_credentials)):
     Optional: Clears memory for a user inside agent.py
     """
     from agent import USER_MEMORIES
+
     USER_MEMORIES[username] = None
     return {"message": f"Memory reset for user {username}"}
 

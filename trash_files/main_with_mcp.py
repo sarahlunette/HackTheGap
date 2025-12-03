@@ -34,6 +34,7 @@ from llama_index.embeddings.huggingface import HuggingFaceEmbedding
 # Memory
 from langchain.memory import ConversationBufferMemory
 from langchain_community.chat_message_histories import ChatMessageHistory
+
 # PDF
 from reportlab.lib.pagesizes import A4
 from reportlab.pdfgen import canvas
@@ -46,7 +47,8 @@ import subprocess  # For running build_vectorstore.py
 
 # Import MCP tools directly
 import sys
-sys.path.append('../mcp_server')
+
+sys.path.append("../mcp_server")
 from tools.earth_engine_tool import fetch_earth_engine_data
 from tools.climate_tool import run_climate_forecast_tool
 from tools.osm_tool import run_osm_data_tool
@@ -97,9 +99,7 @@ ACTION_LOGS: list[Dict[str, Any]] = []
 # ============================================================
 logger.info("Initializing RAG with Qdrant vectorstore...")
 
-embed_model = HuggingFaceEmbedding(
-    model_name="sentence-transformers/all-MiniLM-L6-v2"
-)
+embed_model = HuggingFaceEmbedding(model_name="sentence-transformers/all-MiniLM-L6-v2")
 
 qdrant_client = QdrantClient(url=QDRANT_URL)
 
@@ -119,10 +119,11 @@ query_engine = index.as_retriever(similarity_top_k=3)
 
 USER_MEMORIES = defaultdict(
     lambda: ConversationBufferMemory(
-        return_messages=True,
-        chat_memory=ChatMessageHistory()
+        return_messages=True, chat_memory=ChatMessageHistory()
     )
 )
+
+
 # ============================================================
 # RAG helper
 # ============================================================
@@ -134,9 +135,11 @@ def query_knowledge_base(question: str) -> str:
         return ""
     return "\n".join(n.text for n in nodes)
 
+
 # ============================================================
 # DIRECT MCP TOOL CALLS (integrated)
 # ============================================================
+
 
 async def call_direct_earth_engine(lon, lat, date, radius):
     """
@@ -144,14 +147,12 @@ async def call_direct_earth_engine(lon, lat, date, radius):
     """
     try:
         result = await fetch_earth_engine_data(
-            lon=float(lon),
-            lat=float(lat),
-            recent_start=str(date),
-            radius=int(radius)
+            lon=float(lon), lat=float(lat), recent_start=str(date), radius=int(radius)
         )
         return result
     except Exception as e:
         return {"error": f"Earth Engine tool failed: {str(e)}"}
+
 
 async def call_direct_climate(date_str, area):
     """
@@ -165,6 +166,7 @@ async def call_direct_climate(date_str, area):
     except Exception as e:
         return {"error": f"Climate tool failed: {str(e)}"}
 
+
 async def call_direct_osm(location, features):
     """
     Direct call to run_osm_data_tool.
@@ -176,6 +178,7 @@ async def call_direct_osm(location, features):
         return result
     except Exception as e:
         return {"error": f"OSM tool failed: {str(e)}"}
+
 
 # ============================================================
 # Reasoning Model Prompt (Mistral) - EXTENDED
@@ -256,7 +259,6 @@ User message:
 """
 
 
-
 def _default_structured_reasoning() -> dict:
     return {
         "intent": "resilience_plan",
@@ -279,6 +281,7 @@ def _default_structured_reasoning() -> dict:
         },
     }
 
+
 # -------------------------------
 # Utility: Extract JSON cleanly
 # -------------------------------
@@ -297,9 +300,10 @@ def extract_json_block(text: str) -> str:
         elif char == "}":
             brace_level -= 1
             if brace_level == 0 and start is not None:
-                return cleaned[start:i + 1].strip()
+                return cleaned[start : i + 1].strip()
 
     raise ValueError(f"No JSON object found in text:\n{cleaned}")
+
 
 # -------------------------------
 # Call Retry
@@ -319,13 +323,14 @@ def mistral_call_with_retry(prompt, model="mistral-medium-latest", retries=5):
 
         except Exception as e:
             if "429" in str(e) or "capacity" in str(e):
-                wait = 2 ** i
+                wait = 2**i
                 print(f"Rate-limited — retrying in {wait}s...")
                 time.sleep(wait)
                 continue
             raise
 
     raise RuntimeError("Mistral: too many retries")
+
 
 # ============================================================
 # Reasoning function (FINAL) - EXTENDED
@@ -408,6 +413,7 @@ def generate_reasoning_with_mistral(user_question: str) -> dict:
         entities["date"] = None
 
     return result
+
 
 # ============================================================
 # Claude generator
@@ -495,7 +501,7 @@ Entities: {json.dumps(entities, ensure_ascii=False)}
                 lon=entities["lon"],
                 lat=entities["lat"],
                 date=entities["date"],
-                radius=int(entities.get("radius") or 10)
+                radius=int(entities.get("radius") or 10),
             )
         except Exception as e:
             logger.error(f"Direct Earth Engine failed: {e}")
@@ -506,11 +512,15 @@ Entities: {json.dumps(entities, ensure_ascii=False)}
         reasoning_output.get("intent") == "climate_request"
         and entities.get("date_month") is not None
     ):
-        area = entities.get("area") or [18.2, -63.2, 18.0, -62.9]  # Default Saint-Martin
+        area = entities.get("area") or [
+            18.2,
+            -63.2,
+            18.0,
+            -62.9,
+        ]  # Default Saint-Martin
         try:
             tool_results["climate"] = await call_direct_climate(
-                date_str=entities["date_month"],
-                area=area
+                date_str=entities["date_month"], area=area
             )
         except Exception as e:
             logger.error(f"Direct Climate failed: {e}")
@@ -524,8 +534,7 @@ Entities: {json.dumps(entities, ensure_ascii=False)}
     ):
         try:
             tool_results["osm"] = await call_direct_osm(
-                location=entities["osm_location"],
-                features=entities["osm_features"]
+                location=entities["osm_location"], features=entities["osm_features"]
             )
         except Exception as e:
             logger.error(f"Direct OSM failed: {e}")
@@ -674,8 +683,7 @@ Now answer the CURRENT USER MESSAGE accordingly.
 @app.delete("/chat/reset")
 def reset_history(username: str = Depends(verify_credentials)):
     USER_MEMORIES[username] = ConversationBufferMemory(
-        return_messages=True,
-        chat_memory=ChatMessageHistory()
+        return_messages=True, chat_memory=ChatMessageHistory()
     )
     return {"message": "Memory cleared."}
 

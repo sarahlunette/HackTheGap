@@ -10,6 +10,7 @@ st.title("📄 JSON Viewer — ChatGPT Style + Perfect Lists + Styled PDF Export
 # --- CLEANING FUNCTION ---
 def clean_llm_markdown(text: str) -> str:
     import re
+
     text = text.replace("\\n", "\n").replace("\\t", "    ").strip('"')
     text = re.sub(r"\n\s+(\- |\* |\d+\. |#)", r"\n\1", text)
     text = re.sub(r"\n\s*(#{1,6})\s*", r"\n\1 ", text)
@@ -127,8 +128,5 @@ if uploaded_file:
 
         with open(pdf_path, "rb") as pdf:
             st.download_button(
-                "Download PDF",
-                pdf,
-                file_name="report.pdf",
-                mime="application/pdf"
+                "Download PDF", pdf, file_name="report.pdf", mime="application/pdf"
             )

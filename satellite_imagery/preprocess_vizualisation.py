@@ -1,6 +1,7 @@
 import rasterio
 import matplotlib.pyplot as plt
 
+
 def plot_tiff(filename):
     with rasterio.open(filename) as src:
         image = src.read()

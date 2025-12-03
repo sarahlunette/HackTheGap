@@ -56,8 +56,7 @@ USER_MEMORIES: Dict[str, ConversationBufferMemory] = {}
 def get_memory(username: str) -> ConversationBufferMemory:
     if username not in USER_MEMORIES:
         USER_MEMORIES[username] = ConversationBufferMemory(
-            return_messages=True,
-            chat_message_history=ChatMessageHistory()
+            return_messages=True, chat_message_history=ChatMessageHistory()
         )
     return USER_MEMORIES[username]
 
@@ -65,9 +64,7 @@ def get_memory(username: str) -> ConversationBufferMemory:
 ###############################################
 # RAG INIT
 ###############################################
-embed_model = HuggingFaceEmbedding(
-    model_name="sentence-transformers/all-MiniLM-L6-v2"
-)
+embed_model = HuggingFaceEmbedding(model_name="sentence-transformers/all-MiniLM-L6-v2")
 qdrant_client = QdrantClient(url=QDRANT_URL)
 
 vector_store = QdrantVectorStore(
@@ -185,7 +182,7 @@ def extract_json_block(text: str) -> str:
         elif c == "}":
             brace -= 1
             if brace == 0 and start is not None:
-                return cleaned[start:i + 1].strip()
+                return cleaned[start : i + 1].strip()
     raise ValueError("No JSON found.")
 
 
@@ -227,6 +224,7 @@ def run_reasoning_mistral(user_question: str) -> dict:
 # MCP CALL
 ###############################################
 
+
 async def call_mcp(entities: dict):
     try:
         client = Client(MCP_CLIENT_URL)
@@ -245,6 +243,7 @@ async def call_mcp(entities: dict):
 ###############################################
 # FINAL ANSWER — CLAUDE
 ###############################################
+
 
 def build_claude_prompt(
     user_msg: str,
@@ -346,6 +345,7 @@ def run_claude(prompt: str) -> str:
 # LANGGRAPH — STATE
 ###############################################
 
+
 class AgentState(BaseModel):
     messages: List[Dict[str, Any]]
     reasoning: Optional[Dict[str, Any]] = None
@@ -358,6 +358,7 @@ class AgentState(BaseModel):
 ###############################################
 # NODES
 ###############################################
+
 
 def reasoning_node(state: AgentState):
     user_msg = state.messages[-1]["content"]
@@ -375,7 +376,12 @@ def router(state: AgentState):
     r = state.reasoning or {}
     e = r.get("entities", {}) or {}
 
-    if r.get("intent") == "geospatial_request" and e.get("lon") and e.get("lat") and e.get("date"):
+    if (
+        r.get("intent") == "geospatial_request"
+        and e.get("lon")
+        and e.get("lat")
+        and e.get("date")
+    ):
         return "call_mcp"
     return "no_mcp"
 
@@ -434,6 +440,7 @@ workflow = graph.compile()
 # PUBLIC FUNCTION (FastAPI)
 ###############################################
 
+
 async def run_agent(user_message: str, username: str):
     """
     Entry point used by FastAPI.
@@ -462,5 +469,5 @@ async def run_agent(user_message: str, username: str):
         "answer": result.get("final_answer"),
         "reasoning": result.get("reasoning"),
         "rag_context": result.get("rag"),
-        "mcp_result": result.get("mcp", None),   # ← prevents KeyError
+        "mcp_result": result.get("mcp", None),  # ← prevents KeyError
     }

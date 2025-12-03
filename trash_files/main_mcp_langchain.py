@@ -65,9 +65,7 @@ ACTION_LOGS: list[dict] = []
 # =========================
 # RAG
 # =========================
-embed_model = HuggingFaceEmbedding(
-    model_name="sentence-transformers/all-MiniLM-L6-v2"
-)
+embed_model = HuggingFaceEmbedding(model_name="sentence-transformers/all-MiniLM-L6-v2")
 qdrant_client = QdrantClient(url=QDRANT_URL)
 vector_store = QdrantVectorStore(
     client=qdrant_client,
@@ -81,6 +79,7 @@ index = VectorStoreIndex.from_vector_store(
 )
 query_engine = index.as_retriever(similarity_top_k=3)
 
+
 def query_knowledge_base(question: str) -> str:
     try:
         nodes = query_engine.retrieve(question)
@@ -89,21 +88,24 @@ def query_knowledge_base(question: str) -> str:
         return ""
     return "\n".join(n.text for n in nodes)
 
+
 # =========================
 # MCP Example tools
 # =========================
 def addition(a: int, b: int) -> int:
     return a + b
 
+
 def get_weather(city: str) -> str:
     return f"Weather in {city}: sunny"
+
 
 async def call_mcp_fetch_earth_engine(lon, lat, date, radius):
     payload = {
         "lon": float(lon),
         "lat": float(lat),
         "recent_start": str(date),
-        "radius": int(radius)
+        "radius": int(radius),
     }
     try:
         client = Client("http://localhost:9001/mcp")
@@ -112,6 +114,7 @@ async def call_mcp_fetch_earth_engine(lon, lat, date, radius):
             return result
     except Exception as e:
         return {"error": f"MCP client call failed: {str(e)}"}
+
 
 # =========================
 # Prompt blocks (reasoning, etc)
@@ -126,18 +129,22 @@ User message:
 "{user_question}"
 """
 
+
 def extract_json_block(text: str) -> str:
     cleaned = text.replace("``````", "").strip()
-    brace_level = 0; start = None
+    brace_level = 0
+    start = None
     for i, char in enumerate(cleaned):
         if char == "{":
-            if brace_level == 0: start = i
+            if brace_level == 0:
+                start = i
             brace_level += 1
         elif char == "}":
             brace_level -= 1
             if brace_level == 0 and start is not None:
-                return cleaned[start:i + 1].strip()
+                return cleaned[start : i + 1].strip()
     raise ValueError(f"No JSON object found in text:\n{cleaned}")
+
 
 def mistral_call_with_retry(prompt, model="open-mistral-nemo", retries=5):
     client = Mistral(api_key=MISTRAL_API_KEY)
@@ -152,11 +159,13 @@ def mistral_call_with_retry(prompt, model="open-mistral-nemo", retries=5):
             return res.choices[0].message.content
         except Exception as e:
             if "429" in str(e) or "capacity" in str(e):
-                wait = 2 ** i
+                wait = 2**i
                 print(f"Rate-limited — retrying in {wait}s...")
-                time.sleep(wait); continue
+                time.sleep(wait)
+                continue
             raise
     raise RuntimeError("Mistral: too many retries")
+
 
 def generate_reasoning_with_mistral(user_question: str) -> dict:
     if not MISTRAL_API_KEY:
@@ -179,6 +188,7 @@ def generate_reasoning_with_mistral(user_question: str) -> dict:
         return {}
     return result
 
+
 def generate_with_claude(prompt: str) -> str:
     with anthropic_client.messages.stream(
         model=CLAUDE_MODEL,
@@ -188,6 +198,7 @@ def generate_with_claude(prompt: str) -> str:
     ) as stream:
         return stream.get_final_text()
 
+
 # =========================
 # FastAPI TCP Server
 # =========================
@@ -195,9 +206,12 @@ def generate_with_claude(prompt: str) -> str:
 security = HTTPBasic()
 app.add_middleware(
     CORSMiddleware,
-    allow_origins=["*"], allow_credentials=True,
-    allow_methods=["*"], allow_headers=["*"],
+    allow_origins=["*"],
+    allow_credentials=True,
+    allow_methods=["*"],
+    allow_headers=["*"],
 )
+
 
 def verify_credentials(
     credentials: HTTPBasicCredentials = Depends(security),
@@ -207,10 +221,12 @@ def verify_credentials(
         raise HTTPException(401, "Unauthorized")
     return credentials.username
 
+
 class ChatRequest(BaseModel):
     question: str
     tool: str = None
     args: dict = {}
+
 
 @app.post("/chat")
 async def chat(req: ChatRequest, username: str = Depends(verify_credentials)):
@@ -238,7 +254,7 @@ async def chat(req: ChatRequest, username: str = Depends(verify_credentials)):
             lon=entities["lon"],
             lat=entities["lat"],
             date=entities["date"],
-            radius=int(entities.get("radius") or 10)
+            radius=int(entities.get("radius") or 10),
         )
         result = geospatial_result
     else:
@@ -248,39 +264,47 @@ async def chat(req: ChatRequest, username: str = Depends(verify_credentials)):
 
     # Optionally, memory and logs
     memory[username].append({"user": user_msg, "ai": result})
-    ACTION_LOGS.append({
-        "time": datetime.datetime.now().isoformat(),
-        "user": username,
-        "question": user_msg,
-        "answer": str(result),
-        "reasoning": reasoning_output,
-        "context": rag_context[:500],
-    })
+    ACTION_LOGS.append(
+        {
+            "time": datetime.datetime.now().isoformat(),
+            "user": username,
+            "question": user_msg,
+            "answer": str(result),
+            "reasoning": reasoning_output,
+            "context": rag_context[:500],
+        }
+    )
     return {
         "answer": result,
         "context_used": rag_context,
         "reasoning": reasoning_output,
-        "geospatial_data_used": geospatial_result
+        "geospatial_data_used": geospatial_result,
     }
+
 
 # MCP exposure for tools (addition, get_weather)
 from fastapi_mcp import FastApiMCP
+
 mcp = FastApiMCP(app)
 mcp.mount()
+
 
 @app.get("/addition")
 def mcp_addition(a: int, b: int):
     return {"result": addition(a, b)}
 
+
 @app.get("/weather")
 def mcp_weather(city: str):
     return {"result": get_weather(city)}
+
 
 @app.delete("/chat/reset")
 def reset_history(username: str = Depends(verify_credentials)):
     memory = defaultdict(list)
     memory[username] = []
     return {"message": "Memory cleared."}
+
 
 # To launch:
 # uvicorn main:app --reload
@@ -296,18 +320,22 @@ async def chat(message: str, tool: str = None, args: dict = {}):
         result = f"LLM response to: '{message}'"
     return {"result": result}
 
+
 # MCP auto-exposition : tes endpoints sont documentés et accessibles
 mcp = FastApiMCP(app)
 mcp.mount()
+
 
 # Optionnel : endpoints directs GET si tu veux test manuel
 @app.get("/earth_engine_tool")
 def mcp_earth_engine(lon: float, lat: float, date: str, radius: int = 10):
     return {"result": earth_engine_tool(lon, lat, date, radius)}
 
+
 @app.get("/climate_tool")
 def mcp_climate(location: str, info_type: str):
     return {"result": climate_tool(location, info_type)}
+
 
 # Reset endpoint
 @app.delete("/chat/reset")

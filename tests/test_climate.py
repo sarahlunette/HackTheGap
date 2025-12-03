@@ -4,8 +4,13 @@ import os
 from pathlib import Path
 from unittest.mock import patch, MagicMock
 import sys
-sys.path.append('..')
-from app.tools.climate_tool import get_climate_forecast, run_climate_forecast_tool  # replace 'your_module' as needed
+
+sys.path.append("..")
+from app.tools.climate_tool import (
+    get_climate_forecast,
+    run_climate_forecast_tool,
+)  # replace 'your_module' as needed
+
 
 @pytest.fixture
 def valid_config(tmp_path):
@@ -16,11 +21,22 @@ def valid_config(tmp_path):
     config_file.write_text("url: test_url\nkey: test_key\n")
     return config_file
 
+
 def test_validate_date_good_and_bad():
-    assert get_climate_forecast("2025-08", [18.2, -63.2, 18.0, -62.9])["status"] in ("success", "error")
-    assert get_climate_forecast("2025-13", [18.2, -63.2, 18.0, -62.9])["status"] == "error"
-    assert get_climate_forecast("2025-8", [18.2, -63.2, 18.0, -62.9])["status"] == "error"
-    assert get_climate_forecast("202508", [18.2, -63.2, 18.0, -62.9])["status"] == "error"
+    assert get_climate_forecast("2025-08", [18.2, -63.2, 18.0, -62.9])["status"] in (
+        "success",
+        "error",
+    )
+    assert (
+        get_climate_forecast("2025-13", [18.2, -63.2, 18.0, -62.9])["status"] == "error"
+    )
+    assert (
+        get_climate_forecast("2025-8", [18.2, -63.2, 18.0, -62.9])["status"] == "error"
+    )
+    assert (
+        get_climate_forecast("202508", [18.2, -63.2, 18.0, -62.9])["status"] == "error"
+    )
+
 
 def test_invalid_area():
     res = get_climate_forecast("2025-08", "not a list")
@@ -28,7 +44,10 @@ def test_invalid_area():
     res = get_climate_forecast("2025-08", [18.2, -63.2])
     assert res["status"] == "error"
 
-@patch("your_module.yaml.safe_load", return_value={"url": "test_url", "key": "test_key"})
+
+@patch(
+    "your_module.yaml.safe_load", return_value={"url": "test_url", "key": "test_key"}
+)
 @patch("your_module.cdsapi.Client")
 @patch("your_module.xr.open_dataset")
 def test_end_to_end_success(mock_xr, mock_cdsapi, mock_yaml, tmp_path, monkeypatch):
@@ -54,8 +73,9 @@ def test_end_to_end_success(mock_xr, mock_cdsapi, mock_yaml, tmp_path, monkeypat
 
     res = get_climate_forecast("2025-08", [18.2, -63.2, 18.0, -62.9])
     assert res["status"] == "success"
-    assert "csv_path" in res['csv_path']
+    assert "csv_path" in res["csv_path"]
     assert res["records"] == 5
+
 
 @pytest.mark.anyio
 @patch("your_module.get_climate_forecast", return_value={"status": "success"})

@@ -30,7 +30,7 @@ COPY app/ /app
 # 5) Install Python dependencies (GPU optimized)
 # ============================================================
 RUN pip install --upgrade pip \
-    && pip install --no-cache-dir -r app/requirements.txt
+    && pip install --no-cache-dir -r requirements.txt
 
 ENV HF_HOME=/root/.cache/huggingface
 
@@ -45,5 +45,5 @@ EXPOSE 8000
 
 RUN chmod +x start.sh
 
-CMD ["./app/start.sh"]
+CMD ["./start.sh"]
 

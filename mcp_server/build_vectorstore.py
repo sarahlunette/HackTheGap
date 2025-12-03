@@ -21,7 +21,6 @@ from llama_index.core import Document
 from llama_index.embeddings.huggingface import HuggingFaceEmbedding
 
 
-
 # ============================================================
 # CONFIG
 # ============================================================
@@ -31,7 +30,6 @@ QDRANT_URL = "http://localhost:6333"
 COLLECTION_NAME = "island_docs"
 
 EMBEDDING_MODEL = "./models/all-MiniLM-L6-v2"
-
 
 
 # ============================================================
@@ -63,10 +61,7 @@ def load_csv_rows(path: Path) -> list[Document]:
 
         if text.strip():
             docs.append(
-                Document(
-                    text=text,
-                    metadata={"source": path.name, "row_index": int(i)}
-                )
+                Document(text=text, metadata={"source": path.name, "row_index": int(i)})
             )
 
     return docs
@@ -85,6 +80,7 @@ def load_text_file(path: Path) -> list[Document]:
 def load_docx(path: Path) -> list[Document]:
     try:
         import docx
+
         doc = docx.Document(str(path))
         text = "\n".join(p.text for p in doc.paragraphs)
         return [Document(text=text, metadata={"source": path.name})]
@@ -139,10 +135,7 @@ def load_json(path: Path) -> list[Document]:
         for idx, item in enumerate(data):
             text = flatten(item)
             docs.append(
-                Document(
-                    text=text,
-                    metadata={"source": path.name, "json_index": idx}
-                )
+                Document(text=text, metadata={"source": path.name, "json_index": idx})
             )
 
     # Case 2: Single dict
@@ -154,7 +147,6 @@ def load_json(path: Path) -> list[Document]:
         print(f"⚠ Unsupported JSON structure in {path.name}")
 
     return docs
-
 
 
 # ============================================================
@@ -169,7 +161,6 @@ def doc_key(doc: Document) -> str:
             key += f"#{suffix}:{doc.metadata[suffix]}"
 
     return key
-
 
 
 # ============================================================
@@ -222,7 +213,7 @@ def sync_vectorstore(client, collection_name, embed_model, docs):
                 PointStruct(
                     id=next_id,
                     vector=vector,
-                    payload={"text": doc.text, **doc.metadata}
+                    payload={"text": doc.text, **doc.metadata},
                 )
             )
             next_id += 1
@@ -232,7 +223,6 @@ def sync_vectorstore(client, collection_name, embed_model, docs):
         print("🟢 No new additions.")
 
     print("✔ Sync complete.")
-
 
 
 # ============================================================
@@ -314,9 +304,7 @@ def main():
             vector = embed_model.get_text_embedding(doc.text)
             points.append(
                 PointStruct(
-                    id=pid,
-                    vector=vector,
-                    payload={"text": doc.text, **doc.metadata}
+                    id=pid, vector=vector, payload={"text": doc.text, **doc.metadata}
                 )
             )
             pid += 1
@@ -336,7 +324,6 @@ def main():
     print(f"📌 Collection: {COLLECTION_NAME}")
     print(f"📊 Total vectors stored: {count}")
     print("🚀 Ready for RAG pipelines.\n")
-
 
 
 if __name__ == "__main__":

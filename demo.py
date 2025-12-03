@@ -21,6 +21,7 @@ st.title("🧠 ResilienceGPT — RAG Chatbot (Claude + Qdrant)")
 # ------------------------------------------------------------
 def clean_llm_markdown(text: str) -> str:
     import re
+
     text = text.replace("\\n", "\n").replace("\\t", "    ").strip('"')
     text = re.sub(r"\n\s+(\- |\* |\d+\. |#)", r"\n\1", text)
     text = re.sub(r"\n\s*(#{1,6})\s*", r"\n\1 ", text)
@@ -134,7 +135,7 @@ if user_input:
         response = requests.post(
             API_URL,
             json={"question": user_input},
-            auth=HTTPBasicAuth(API_USERNAME, API_PASSWORD)
+            auth=HTTPBasicAuth(API_USERNAME, API_PASSWORD),
         )
     except Exception as e:
         st.error(f"❌ Impossible d’appeler l’API FastAPI : {e}")
