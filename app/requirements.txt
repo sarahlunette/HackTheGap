@@ -25,8 +25,8 @@ python-docx
 pandas
 reportlab
 
-langchain==0.2.11
-langchain_community==0.2.4
+langchain==1.0.7
+langchain_community
 langgraph
 langchain_anthropic
 langchain_mistralai

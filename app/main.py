@@ -322,9 +322,10 @@ def synthesis_fn(state):
     rag_block = rag_context if rag_context.strip() else "<<EMPTY>>"
 
     # 7. Prompt length safety
+    # {str(tool_result)}
     synthesis_prompt = f"""
 Reasoning info: {str(reasoning)}
-Tool result: {str(tool_result)}
+Tool result: 
 -------------------------------------------------------------------------------
 ### 🔎 INPUT BLOCKS
 
