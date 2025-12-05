@@ -2,11 +2,13 @@ import streamlit as st
 import requests
 import markdown
 from fpdf import FPDF
+import os
+from dotenv import load_dotev
 
 st.set_page_config(page_title="ResilienceGPT Chatbot", layout="wide")
 st.title("🧠 ResilienceGPT — RAG Chatbot (Claude + Qdrant)")
 
-API_URL = st.secrets["API_URL"]
+API_URL = os.getenv("API_URL")
 
 # Chat history
 if "messages" not in st.session_state:
