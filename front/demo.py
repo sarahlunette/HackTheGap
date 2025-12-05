@@ -14,7 +14,7 @@ load_dotenv()
 # ------------------------------------------------------------
 API_URL = os.getenv("API_URL")
 
-# TODO: modifier le script pour les endpoint de l'api
+# TODO: modifier le script pour les endpoints de l'api
 
 API_USERNAME = "admin"
 API_PASSWORD = "password"
@@ -142,7 +142,7 @@ if user_input:
         response = requests.post(
             API_URL,
             json={"question": user_input},
-            auth=HTTPBasicAuth(API_USERNAME, API_PASSWORD),
+            # auth=HTTPBasicAuth(API_USERNAME, API_PASSWORD),
         )
     except Exception as e:
         st.error(f"❌ Impossible d’appeler l’API FastAPI : {e}")

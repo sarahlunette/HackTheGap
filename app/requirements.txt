@@ -10,7 +10,7 @@ anthropic
 huggingface_hub
 mistralai
 
-qdrant-client
+qdrant-client==1.16.1
 llama-index-core
 llama-index-vector-stores-qdrant
 llama-index-embeddings-huggingface

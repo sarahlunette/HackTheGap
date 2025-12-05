@@ -291,13 +291,13 @@ async def tool_earth_engine_fn(state):
     date = entities.get("date")
     user_msg = state["user_msg"]
     # If parameters complete, call the real tool
-
-    result = await fetch_earth_engine_data(lat=lat, lon=lon, recent_start=date)
-    result = result["api_response"]
+# TODO MODIFY WHEN CV TOOL
+    # result = await fetch_earth_engine_data(lat=lat, lon=lon, recent_start=date)
+    # result = result["api_response"]
     return {
         "user_msg": user_msg,
         "reasoning": reasoning,
-        "tool_result": result or {"answer": "all zones are vulnerable"},
+        "tool_result": {"answer": "all zones are vulnerable"}, # result or {"answer": "all zones are vulnerable"},
         "final_answer": {"answer": "None"},
     }
 
