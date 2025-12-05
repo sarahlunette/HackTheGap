@@ -80,16 +80,16 @@ app.add_middleware(
     allow_headers=["*"],
 )
 
-AUTH_MODE = os.getenv("AUTH_MODE", "basic")
-MVP_USER = os.getenv("MVP_USER", "admin")
-MVP_PASS = os.getenv("MVP_PASS", "password")
-security = HTTPBasic()
+# AUTH_MODE = os.getenv("AUTH_MODE", "basic")
+# MVP_USER = os.getenv("MVP_USER", "admin")
+# MVP_PASS = os.getenv("MVP_PASS", "password")
+# security = HTTPBasic()
 
 
-def verify_credentials(credentials: HTTPBasicCredentials = Depends(security)):
-    if credentials.username != MVP_USER or credentials.password != MVP_PASS:
-        raise HTTPException(401, "Unauthorized")
-    return credentials.username
+# def verify_credentials(credentials: HTTPBasicCredentials = Depends(security)):
+#     if credentials.username != MVP_USER or credentials.password != MVP_PASS:
+#         raise HTTPException(401, "Unauthorized")
+#     return credentials.username
 
 
 class ChatRequest(BaseModel):
@@ -97,13 +97,15 @@ class ChatRequest(BaseModel):
 
 
 # --- RAG Context ---
-QDRANT_URL = os.getenv("qdrant_url")
-QDRANT_API_KEY = os.getenv("qdrant_api_key")
+QDRANT_URL = os.environ["QDRANT_URL"]
+QDRANT_API_KEY = os.environ["QDRANT_API_KEY"]
 COLLECTION_NAME = os.getenv("QDRANT_COLLECTION", "island_docs")
 embed_model = HuggingFaceEmbedding(model_name="./models/all-MiniLM-L6-v2")
 qdrant_client = QdrantClient(
         url=QDRANT_URL, 
-        api_key=QDRANT_API_KEY
+        api_key=QDRANT_API_KEY,
+        prefer_grpc=False,
+        timeout=60
     )
 vector_store = QdrantVectorStore(client=qdrant_client, collection_name=COLLECTION_NAME)
 storage_context = StorageContext.from_defaults(vector_store=vector_store)
@@ -284,7 +286,6 @@ async def tool_earth_engine_fn(state):
     reasoning = state.get("reasoning")
     final_answer = {"answer": "None"}
     entities = reasoning["entities"]
-    print(entities)
     lat = int(entities.get("lat") or '0')
     lon = int(entities.get("lon") or '0')
     date = entities.get("date")
@@ -401,7 +402,6 @@ Now answer the CURRENT USER MESSAGE accordingly.
 """
     MAX_PROMPT_CHARS = 600000
     safe_prompt = synthesis_prompt[:MAX_PROMPT_CHARS]
-    print('length of safe_prompt', len(safe_prompt))
     final_answer = claude_llm.invoke(safe_prompt)
     text = (
         final_answer.content if hasattr(final_answer, "content") else str(final_answer)
@@ -446,7 +446,7 @@ async def run_test(user_msg: str):
 # ---------- Graph: Mistral -> Tools -> Claude ----------
 @app.post("/agent/mistral")
 async def use_agent_mistral(
-    req: ChatRequest, username: str = Depends(verify_credentials)
+    req: ChatRequest#, username: str = Depends(verify_credentials)
 ):
     prompt = req.question.strip()
     outputs = await run_test(prompt)
@@ -458,7 +458,7 @@ async def use_agent_mistral(
 
 @app.post("/mistral_node")
 async def use_agent_mistral_(
-    req: ChatRequest, username: str = Depends(verify_credentials)
+    req: ChatRequest#, username: str = Depends(verify_credentials)
 ):
     user_msg = req.question.strip()
 
@@ -469,7 +469,7 @@ async def use_agent_mistral_(
 
 @app.post("/mistral_node_llm")
 async def use_agent_mistral_(
-    req: ChatRequest, username: str = Depends(verify_credentials)
+    req: ChatRequest#, username: str = Depends(verify_credentials)
 ):
     user_msg = req.question.strip()
     reasoning = mistral_llm.invoke(REASONING_PROMPT + user_msg)
@@ -478,7 +478,8 @@ async def use_agent_mistral_(
 
 
 @app.post("/chat/mistral-claude")
-async def chat(user_req: ChatRequest, username: str = Depends(verify_credentials)):
+async def chat(user_req: ChatRequest#, username: str = Depends(verify_credentials)
+               ):
     user_msg = user_req.question.strip()
 
     outputs = await run_resilience_pipeline(user_msg)

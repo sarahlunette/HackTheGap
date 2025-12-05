@@ -28,8 +28,8 @@ load_dotenv()
 # CONFIG
 # ============================================================
 DOCS_DIR = Path("./docs")
-QDRANT_URL = os.getenv("qdrant_url")
-QDRANT_API_KEY = os.getenv("qdrant_api_key")
+QDRANT_URL = os.environ["QDRANT_URL"]
+QDRANT_API_KEY = os.environ["QDRANT_API_KEY"]
 COLLECTION_NAME = "island_docs"
 EMBEDDING_MODEL = "./models/all-MiniLM-L6-v2"
 
@@ -249,7 +249,7 @@ def main():
 
     # Qdrant connection
     print("🗄 Connecting to Qdrant…")
-    client = QdrantClient(url=QDRANT_URL, api_key=QDRANT_API_KEY, prefer_grpc=False)
+    client = QdrantClient(url=QDRANT_URL, api_key=QDRANT_API_KEY, prefer_grpc=False, timeout=60)
 
     collections = [c.name for c in client.get_collections().collections]
 

@@ -4,21 +4,20 @@ set -e
 # -----------------------------
 #  Configuration from env vars
 # -----------------------------
-QDRANT_URL="${QDRANT_URL:?QDRANT_URL is not set}"
-QDRANT_API_KEY="${QDRANT_API_KEY:?QDRANT_API_KEY is not set}"
-COLLECTION="island_docs"
-
+: "${QDRANT_URL:?QDRANT_URL is not set}"
+: "${QDRANT_API_KEY:?QDRANT_API_KEY is not set}"
+COLLECTION="${COLLECTION:-island_docs}"
 PORT="${PORT:-8080}"
 
-echo "💡 Cloud Run PORT is: $PORT"
+echo "💡 Cloud Run PORT: $PORT"
 echo "💡 Qdrant URL: $QDRANT_URL"
+echo "💡 Collection: $COLLECTION"
 
 # -----------------------------
-#  Start FastAPI immediately
+#  Start FastAPI server
 # -----------------------------
-echo "🚀 Starting FastAPI server in background..."
+echo "🚀 Starting FastAPI..."
 uvicorn main:app --host 0.0.0.0 --port $PORT &
-
 FASTAPI_PID=$!
 
 # -----------------------------
@@ -26,33 +25,29 @@ FASTAPI_PID=$!
 # -----------------------------
 MAX_RETRIES=120
 COUNTER=0
-
 echo "⏳ Waiting for Qdrant collections endpoint..."
-while true; do
-    RESPONSE=$(curl -s -H "api-key: $QDRANT_API_KEY" "$QDRANT_URL/collections" || true)
-    if echo "$RESPONSE" | jq empty >/dev/null 2>&1; then
-        echo "🟢 Qdrant collections endpoint is ready."
-        break
-    fi
+
+until curl -s -H "api-key: $QDRANT_API_KEY" "$QDRANT_URL/collections" | jq empty >/dev/null 2>&1; do
     COUNTER=$((COUNTER+1))
-    if [[ $COUNTER -gt $MAX_RETRIES ]]; then
-        echo "❌ Qdrant did not become ready after $MAX_RETRIES seconds."
-        break
+    if [[ $COUNTER -ge $MAX_RETRIES ]]; then
+        echo "❌ Qdrant not ready after $MAX_RETRIES seconds. Exiting."
+        exit 1
     fi
     echo "   …waiting ($COUNTER/$MAX_RETRIES)"
     sleep 1
 done
 
+echo "🟢 Qdrant is ready."
+
 # -----------------------------
-#  Ensure target collection exists
+#  Ensure collection exists
 # -----------------------------
-echo "📁 Checking if collection '$COLLECTION' exists…"
 EXISTS=$(curl -s -H "api-key: $QDRANT_API_KEY" "$QDRANT_URL/collections/$COLLECTION/exists" | jq -r '.result.exists // false')
 
 if [[ "$EXISTS" == "true" ]]; then
-    echo "✔ Collection already exists."
+    echo "✔ Collection '$COLLECTION' already exists."
 else
-    echo "⚠ Collection missing — creating '$COLLECTION'…"
+    echo "⚠ Collection '$COLLECTION' missing — creating it..."
     curl -s -X PUT "$QDRANT_URL/collections/$COLLECTION" \
       -H "Content-Type: application/json" \
       -H "api-key: $QDRANT_API_KEY" \
@@ -66,9 +61,9 @@ else
 fi
 
 # -----------------------------
-#  Build vector store in background
+#  Launch vectorstore build in background
 # -----------------------------
-echo "🚀 Running vectorstore initialization in background..."
+echo "🚀 Launching vectorstore build..."
 (
     if python build_vectorstore.py; then
         echo "🟢 Vectorstore ready."
@@ -78,6 +73,6 @@ echo "🚀 Running vectorstore initialization in background..."
 ) &
 
 # -----------------------------
-#  Wait for FastAPI process to keep container alive
+#  Keep FastAPI running
 # -----------------------------
 wait $FASTAPI_PID

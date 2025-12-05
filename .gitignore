@@ -5,3 +5,4 @@ models
 venv
 .env
 satellite_imagery
+additional_docs
