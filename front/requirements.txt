@@ -1,3 +1,4 @@
 streamlit
 weasyprint
 load_dotenv
+markdown
