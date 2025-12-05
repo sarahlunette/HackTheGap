@@ -28,8 +28,6 @@ from langchain_community.tools import Tool
 # from langchain.memory import ConversationBufferMemory
 from langchain_community.chat_message_histories import ChatMessageHistory
 
-# FastAPI MCP
-from fastapi_mcp import FastApiMCP
 
 # LLM
 from langchain_anthropic import ChatAnthropic
@@ -99,10 +97,14 @@ class ChatRequest(BaseModel):
 
 
 # --- RAG Context ---
-QDRANT_URL = os.getenv("QDRANT_URL", "http://localhost:6333")
+QDRANT_URL = os.getenv("qdrant_url")
+QDRANT_API_KEY = os.getenv("qdrant_api_key")
 COLLECTION_NAME = os.getenv("QDRANT_COLLECTION", "island_docs")
 embed_model = HuggingFaceEmbedding(model_name="./models/all-MiniLM-L6-v2")
-qdrant_client = QdrantClient(url=QDRANT_URL)
+qdrant_client = QdrantClient(
+        url=QDRANT_URL, 
+        api_key=QDRANT_API_KEY
+    )
 vector_store = QdrantVectorStore(client=qdrant_client, collection_name=COLLECTION_NAME)
 storage_context = StorageContext.from_defaults(vector_store=vector_store)
 index = VectorStoreIndex.from_vector_store(
@@ -263,12 +265,9 @@ def reasoning_fn(state):
     user_msg = state["user_msg"]
     tool_result = {"answer": "all zones are vulnerable"}
     final_answer = {"answer": "None"}
-    print(user_msg)
     prompt = f"""{REASONING_PROMPT} and User message: {user_msg}, return JSON ONLY"""
     reasoning_output = mistral_llm.invoke(prompt)
-    print(reasoning_output)
     reasoning_json = json.loads(clean_llm_json(reasoning_output))
-    print(reasoning_json)
     return {
         "user_msg": user_msg,
         "reasoning": reasoning_json,
@@ -282,12 +281,9 @@ graph.add_node("reasoning", reasoning_fn)
 
 # --- Tool Node ---
 async def tool_earth_engine_fn(state):
-    print("Start of tool function")
     reasoning = state.get("reasoning")
     final_answer = {"answer": "None"}
-    print(state, reasoning)
     entities = reasoning["entities"]
-    print("Here are the entities !!!!!!!!!!", entities)
     lat = int(entities.get("lat"))
     lon = int(entities.get("lon"))
     date = entities.get("date")
@@ -296,7 +292,6 @@ async def tool_earth_engine_fn(state):
 
     result = await fetch_earth_engine_data(lat=lat, lon=lon, recent_start=date)
     result = result["api_response"]
-    print(result)
     return {
         "user_msg": user_msg,
         "reasoning": reasoning,
@@ -311,11 +306,8 @@ graph.add_node("tool", tool_earth_engine_fn)
 # --- Synthesis Node ---
 def synthesis_fn(state):
     reasoning = state["reasoning"]
-    print(reasoning)
     tool_result = state["tool_result"]
-    print(tool_result)
     user_msg = state["user_msg"]
-    print(user_msg)
 
     # Get RAG context
     rag_context = query_knowledge_base(user_msg)
@@ -441,7 +433,6 @@ async def run_resilience_pipeline(user_msg: str):
         "tool_result": {"answer": "All zones are vulnerable"},
         "final_answer": {"answer": "None"},
     }
-    print(state)
     outputs = await graph_app.ainvoke(state)
     return outputs
 
@@ -482,8 +473,6 @@ async def use_agent_mistral_(
     user_msg = req.question.strip()
     reasoning = mistral_llm.invoke(REASONING_PROMPT + user_msg)
     reasoning_output = clean_llm_json(reasoning)
-    print("RAW LLM OUTPUT:", reasoning)
-    print("cleaned output: ", reasoning_output)
     return reasoning_output
 
 
@@ -504,7 +493,7 @@ async def chat(user_req: ChatRequest, username: str = Depends(verify_credentials
 
     # Safe access to entities
     entities = (
-        reasoning["reasoning"].get("entities") if isinstance(reasoning, dict) else None
+        reasoning.get("entities") if isinstance(reasoning, dict) else None
     )
 
     response = {
@@ -529,81 +518,3 @@ async def chat(user_req: ChatRequest, username: str = Depends(verify_credentials
         )
 
     return response
-
-
-# ---------- Graph: Mistral -> Tools -> Claude ----------
-if __name__ == "__main__":
-    # state = {
-    #     "user_msg":"Cyclone irma, saint-martin"
-    # }
-    # reasoning = reasoning_fn(state)
-    # reasoning = {'reasoning': {'intent': 'resilience_plan', 'entities': {'sectors': None, 'locations': ['Saint-Martin'], 'time_horizon': None, 'specific_locations': None, 'disaster_type': 'cyclone', 'disaster_name': 'Irma', 'date': '2017-09-06', 'lon': -63.0667, 'lat': 18.0833, 'radius': None}, 'response_mode': 'structured'}}
-    # state = {
-    #     "user_msg": "Cyclone irma, saint-martin",
-    #     "reasoning": reasoning
-    # }
-    # tool_result = tool_earth_engine_fn(state)
-    # print(tool_result)
-    # state = {
-    #     "user_msg": "Cyclone irma, saint-martin",
-    #     "reasoning": reasoning,
-    #     "tool_result": tool_result
-    # }
-    # synthesis = synthesis_fn(state)
-    # print(synthesis)
-    user_msg = "Cyclone irma, saint-martin"
-
-    state = {
-        "user_msg": user_msg,
-        "reasoning": {"answer": "None"},
-        "tool_result": {"answer": "All zones are vulnerable"},
-        "final_answer": {"answer": "None"},
-    }
-
-    reasoning = reasoning_fn(state)
-    print("-------------reasoning--------------")
-    print(reasoning)
-
-    outputs = asyncio.run(run_resilience_pipeline(user_msg="cylcone irma, saint-martin"))
-    print("-------------outputs--------------")
-    print(outputs)
-    # Get intermediary answers
-    reasoning = outputs.get("reasoning").get("reasoning")
-    print("-------------reasoning 2--------------")
-    print(reasoning)
-    # Get Claude final answer
-    final_answer = outputs.get("final_answer")
-    print("-------------final_answer--------------")
-    print(final_answer)
-    # Get Claude tool answer
-    tool_result = outputs.get("tool_result")
-    print("-------------tool_result--------------")
-    print(tool_result)
-    # Safe access to entities
-    entities = (
-        reasoning["reasoning"].get("entities") if isinstance(reasoning, dict) else None
-    )
-    print("-------------entities--------------")
-    print(entities)
-    response = {
-        "answer": final_answer,
-        "reasoning": reasoning,
-        "tool_result": tool_result,
-        "extracted_date": None,
-        "extracted_lon": None,
-        "extracted_lat": None,
-        "extracted_radius": None,
-    }
-
-    if isinstance(entities, dict):
-        response["extracted_date"] = entities.get("date")
-        response["extracted_lon"] = entities.get("lon")
-        response["extracted_lat"] = entities.get("lat")
-        response["extracted_radius"] = entities.get("radius")
-
-    if reasoning is None or entities is None:
-        logger.warning(
-            f"/agent/mistral: Missing reasoning or entities. reasoning={reasoning}."
-        )
-    print("-------------outputs 2--------------")
-    print(outputs)

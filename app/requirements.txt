@@ -36,3 +36,6 @@ anyio
 overpy
 asyncio
 
+cdsapi
+xarray
+

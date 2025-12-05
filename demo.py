@@ -4,11 +4,18 @@ from requests.auth import HTTPBasicAuth
 import json
 import markdown
 from weasyprint import HTML
+import os
+from dotenv import load_dotenv
+load_dotenv()
+
 
 # ------------------------------------------------------------
 # CONFIG
 # ------------------------------------------------------------
-API_URL = "http://localhost:8000/chat"
+API_URL = os.getenv("API_URL")
+
+# TODO: modifier le script pour les endpoint de l'api
+
 API_USERNAME = "admin"
 API_PASSWORD = "password"
 
