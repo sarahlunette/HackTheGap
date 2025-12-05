@@ -3,7 +3,7 @@ import requests
 import markdown
 from fpdf import FPDF
 import os
-from dotenv import load_dotev
+# from dotenv import load_dotev
 
 st.set_page_config(page_title="ResilienceGPT Chatbot", layout="wide")
 st.title("🧠 ResilienceGPT — RAG Chatbot (Claude + Qdrant)")
