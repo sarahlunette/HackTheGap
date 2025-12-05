@@ -8,7 +8,7 @@ from dotenv import load_dotev
 st.set_page_config(page_title="ResilienceGPT Chatbot", layout="wide")
 st.title("🧠 ResilienceGPT — RAG Chatbot (Claude + Qdrant)")
 
-API_URL=https://resilience-debug-app-763875669747.europe-west1.run.app/chat/mistral-claude
+API_URL="https://resilience-debug-app-763875669747.europe-west1.run.app/chat/mistral-claude"
 # API_URL = os.getenv("API_URL")
 
 # Chat history
