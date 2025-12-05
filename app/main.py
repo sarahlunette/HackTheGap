@@ -284,8 +284,9 @@ async def tool_earth_engine_fn(state):
     reasoning = state.get("reasoning")
     final_answer = {"answer": "None"}
     entities = reasoning["entities"]
-    lat = int(entities.get("lat"))
-    lon = int(entities.get("lon"))
+    print(entities)
+    lat = int(entities.get("lat") or '0')
+    lon = int(entities.get("lon") or '0')
     date = entities.get("date")
     user_msg = state["user_msg"]
     # If parameters complete, call the real tool

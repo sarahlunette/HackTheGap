@@ -1,0 +1,13 @@
+{
+  "input": {
+    "lon": 0,
+    "lat": 0,
+    "recent_start": "2017-09-06",
+    "radius": 10,
+    "thresholdFactor": 2.5
+  },
+  "api_response": {
+    "error": "API returned 400",
+    "details": "{\"baseline_size\":0,\"error\":\"No Sentinel-1 images for the given area/date\",\"recent_size\":0}\n"
+  }
+}
