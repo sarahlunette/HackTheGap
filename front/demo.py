@@ -1,185 +1,67 @@
 import streamlit as st
 import requests
-from requests.auth import HTTPBasicAuth
-import json
 import markdown
-from weasyprint import HTML
-import os
-from dotenv import load_dotenv
-load_dotenv()
-
-
-# ------------------------------------------------------------
-# CONFIG
-# ------------------------------------------------------------
-API_URL = os.getenv("API_URL")
-
-# TODO: modifier le script pour les endpoints de l'api
-
-API_USERNAME = "admin"
-API_PASSWORD = "password"
+from fpdf import FPDF
 
 st.set_page_config(page_title="ResilienceGPT Chatbot", layout="wide")
 st.title("🧠 ResilienceGPT — RAG Chatbot (Claude + Qdrant)")
 
+API_URL = st.secrets["API_URL"]
 
-# ------------------------------------------------------------
-# CLEAN MARKDOWN
-# ------------------------------------------------------------
+# Chat history
+if "messages" not in st.session_state:
+    st.session_state.messages = []
+
+# Display chat
+for role, message in st.session_state.messages:
+    with st.chat_message(role):
+        st.markdown(message)
+
+# Chat input
+user_input = st.chat_input("Pose une question…")
+
 def clean_llm_markdown(text: str) -> str:
     import re
-
     text = text.replace("\\n", "\n").replace("\\t", "    ").strip('"')
     text = re.sub(r"\n\s+(\- |\* |\d+\. |#)", r"\n\1", text)
     text = re.sub(r"\n\s*(#{1,6})\s*", r"\n\1 ", text)
     text = re.sub(r"\n{3,}", "\n\n", text)
     return text.strip()
 
-
-# ------------------------------------------------------------
-# PDF EXPORT
-# ------------------------------------------------------------
 def generate_pdf_from_markdown(markdown_text, output_path):
-    html = markdown.markdown(markdown_text, extensions=["fenced_code", "tables"])
-
-    html_template = f"""
-    <html>
-    <head>
-        <style>
-            body {{
-                font-family: 'Helvetica', sans-serif;
-                margin: 2rem;
-                line-height: 1.6;
-                font-size: 12px;
-            }}
-            h1, h2, h3, h4 {{
-                font-weight: bold;
-                margin-top: 1.5rem;
-                margin-bottom: .5rem;
-            }}
-            ul {{
-                margin-left: 1.5rem;
-                padding-left: 1.2rem;
-                list-style-type: disc;
-            }}
-            ul li {{
-                margin-bottom: 4px;
-                padding-left: 4px;
-            }}
-            ol {{
-                margin-left: 1.5rem;
-                padding-left: 1.2rem;
-            }}
-            ol li {{
-                margin-bottom: 4px;
-                padding-left: 4px;
-            }}
-            pre {{
-                background-color: #f4f4f4;
-                padding: 12px;
-                border-radius: 8px;
-                overflow-x: auto;
-                font-size: 11px;
-                line-height: 1.4;
-            }}
-            code {{
-                background-color: #f4f4f4;
-                padding: 2px 4px;
-                border-radius: 4px;
-            }}
-            table {{
-                border-collapse: collapse;
-                margin-top: 1rem;
-            }}
-            th, td {{
-                border: 1px solid #888;
-                padding: 6px;
-                font-size: 11px;
-            }}
-        </style>
-    </head>
-    <body>
-        {html}
-    </body>
-    </html>
-    """
-
-    HTML(string=html_template).write_pdf(output_path)
-
-
-# ------------------------------------------------------------
-# SESSION STATE: CHAT HISTORY
-# ------------------------------------------------------------
-if "messages" not in st.session_state:
-    st.session_state.messages = []
-
-
-# ------------------------------------------------------------
-# DISPLAY CHAT HISTORY
-# ------------------------------------------------------------
-for role, message in st.session_state.messages:
-    with st.chat_message(role):
-        st.markdown(message)
-
-
-# ------------------------------------------------------------
-# CHAT INPUT
-# ------------------------------------------------------------
-user_input = st.chat_input("Pose une question…")
+    pdf = FPDF()
+    pdf.add_page()
+    pdf.set_auto_page_break(auto=True, margin=15)
+    pdf.set_font("Arial", size=12)
+    lines = markdown_text.split("\n")
+    for line in lines:
+        pdf.multi_cell(0, 5, line)
+    pdf.output(output_path)
 
 if user_input:
-    # Save user message
     st.session_state.messages.append(("user", user_input))
-
-    # Display immediately
     with st.chat_message("user"):
         st.markdown(user_input)
 
-    # --------------------------------------------------------
-    # SEND TO API
-    # --------------------------------------------------------
     try:
-        response = requests.post(
-            API_URL,
-            json={"question": user_input},
-            # auth=HTTPBasicAuth(API_USERNAME, API_PASSWORD),
-        )
+        response = requests.post(API_URL, json={"question": user_input})
+        response.raise_for_status()
     except Exception as e:
-        st.error(f"❌ Impossible d’appeler l’API FastAPI : {e}")
-        st.stop()
-
-    if response.status_code != 200:
-        st.error(f"❌ API error: {response.text}")
+        st.error(f"❌ Impossible d’appeler l’API : {e}")
         st.stop()
 
     data = response.json()
-
-    # Clean answer
     clean_answer = clean_llm_markdown(data["answer"])
-
-    # Save assistant message to history
     st.session_state.messages.append(("assistant", clean_answer))
-
-    # Display response
     with st.chat_message("assistant"):
         st.markdown(clean_answer)
 
-
-# ------------------------------------------------------------
-# PDF EXPORT BUTTON (Export entire conversation)
-# ------------------------------------------------------------
+# PDF export
 if st.button("📥 Exporter la conversation en PDF"):
     full_markdown = ""
     for role, msg in st.session_state.messages:
         full_markdown += f"### {role.capitalize()}\n{msg}\n\n"
-
     out_path = "conversation.pdf"
     generate_pdf_from_markdown(full_markdown, out_path)
-
     with open(out_path, "rb") as pdf:
-        st.download_button(
-            "📄 Télécharger le PDF",
-            pdf,
-            file_name="conversation.pdf",
-            mime="application/pdf",
-        )
+        st.download_button("📄 Télécharger le PDF", pdf, file_name="conversation.pdf", mime="application/pdf")
